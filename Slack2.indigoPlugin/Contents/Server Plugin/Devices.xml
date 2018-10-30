@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<Devices>
+	<Device type="custom" id="slackAccount">
+		<Name>Slack Workspace</Name>
+		<ConfigUI>
+        	<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
+	        <Field id="slack_token" type="textfield" default="">
+		        <Label>Slack OAuth Token:</Label>
+	        </Field>
+            <Field id="slack_token_help" type="label" fontSize="mini" alignWithControl="true">
+                <Label>Required, can be created at https://api.slack.com/apps</Label>
+            </Field>
+		</ConfigUI>
+		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Status</TriggerLabel>
+				<ControlPageLabel>Status</ControlPageLabel>
+			</State>
+		</States>
+    <UiDisplayStateId>status</UiDisplayStateId>
+	</Device>
+</Devices>

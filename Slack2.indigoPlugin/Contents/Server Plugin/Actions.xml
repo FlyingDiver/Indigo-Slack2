@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<Actions>
+	<Action id="send" uiPath="NotificationActions" deviceFilter="self.slackAccount">
+		<Name>Send Message to Slack Channel</Name>
+		<CallbackMethod>sendMessage</CallbackMethod>
+		<ConfigUI>
+            <Field id="channel" type="menu">
+                <Label>Channel:</Label>
+                <List class="self" method="get_channel_list" dynamicReload="true"/>
+                <CallbackMethod>menuChanged</CallbackMethod>
+            </Field>
+			<Field id="subsNote" type="label" fontSize="small">
+				<Label>Variable and Device State Substitution is enabled for all fields. Use the format %%v:12345%% for variables and %%d:12345:someStateId%% for device states.</Label>
+			</Field>
+			<Field id="msgBody" type="textfield" default="">
+				<Label>Message:
+				
+				
+				
+				
+				
+				
+				
+				</Label>
+			</Field>
+			<Field id="hlpMsgBody" type="label" fontSize="mini" alignWithControl="true">
+				<Label>Required. This is the body of your message. </Label>
+			</Field>
+			<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
+		</ConfigUI>
+	</Action>
+</Actions>
