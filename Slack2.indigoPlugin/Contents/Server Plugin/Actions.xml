@@ -9,9 +9,6 @@
                 <List class="self" method="get_channel_list" dynamicReload="true"/>
                 <CallbackMethod>menuChanged</CallbackMethod>
             </Field>
-			<Field id="subsNote" type="label" fontSize="small">
-				<Label>Variable and Device State Substitution is enabled for all fields. Use the format %%v:12345%% for variables and %%d:12345:someStateId%% for device states.</Label>
-			</Field>
 			<Field id="msgBody" type="textfield" default="">
 				<Label>Message:
 				
@@ -26,6 +23,16 @@
 			<Field id="hlpMsgBody" type="label" fontSize="mini" alignWithControl="true">
 				<Label>Required. This is the body of your message. </Label>
 			</Field>
+            <Field id="attachments" type="textfield">
+                <Label>File Attachments:</Label>
+            </Field>
+            <Field id="attachmentsNotes" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true">
+            	<Label>comma separated</Label>
+            </Field>
+            <Field id="simpleSeparator2" type="separator"/>
+            <Field id="messageNote" type="label" fontSize="small" fontColor="darkgray">
+                <Label>Variable and Device State Substitution is enabled for all fields. Use the format %%v:12345%% for variables and %%d:12345:someStateId%% for device states.</Label>
+            </Field>
 			<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
 		</ConfigUI>
 	</Action>

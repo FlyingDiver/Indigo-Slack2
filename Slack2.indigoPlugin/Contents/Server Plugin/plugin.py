@@ -4,6 +4,7 @@
 from slackclient import SlackClient
 import logging
 import json
+import os
 
 class Plugin(indigo.PluginBase):
 
@@ -110,4 +111,22 @@ class Plugin(indigo.PluginBase):
             self.logger.warning(u"{}: Message failed with error: {}".format(slackDevice.name, result["error"]))   
             slackDevice.updateStateOnServer(key="status", value="Error")
 
-        
+        attach = pluginAction.props.get("attachments", "")
+        if len(attach) > 0:
+
+            files = indigo.activePlugin.substitute(attach)
+            fileList = files.split(",")
+            for file in fileList:
+                path = os.path.expanduser(file)
+                name = os.path.basename(path)
+                try:
+                    with open(path, "rb") as file_content:
+                        sc.api_call("files.upload", channels=channel, file=file_content, title=name)
+                        if result["ok"]:            
+                            self.logger.info(u"{}: File upload successful: {}".format(slackDevice.name, path))   
+                            slackDevice.updateStateOnServer(key="status", value="Success")
+                        else:
+                            self.logger.warning(u"{}: File upload failed for {} with error: {}".format(slackDevice.name, path, result["error"]))   
+                            slackDevice.updateStateOnServer(key="status", value="Error")
+                except:
+                    self.logger.warning(u"{}: Unable to upload file: {}".format(slackDevice.name, path))   
