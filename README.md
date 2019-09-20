@@ -7,6 +7,15 @@ This plugin extends [Indigo](http://www.indigodomo.com) allowing it to send mess
 
 ## Installation
 
+* This plugin requires the Python websockets module, which is not installed by default.  
+* You will also need the Xcode command line tools.
+
+```
+sudo pip install websocket
+sudo pip install websocket-client
+```  
+
+
 * Download the ZIP file from Releases (above)
 * Unzip the file if it doesn't automatically unzip
 * On the computer running Indigo, double-click the file "Slack2.indigoPlugin"
