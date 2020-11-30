@@ -52,9 +52,9 @@ class Plugin(indigo.PluginBase):
             sc = SlackClient(slack_token)
             self.clients[device.id] = sc
             
-            result = sc.api_call("channels.list", exclude_archived=1)
+            result = sc.api_call("conversations.list", exclude_archived=True)
             if result["ok"]:            
-                self.logger.debug(u"{}: Connection OK, found {} channels.".format(device.name, len(result["channels"])))
+                self.logger.debug(u"{}: Connection OK, found {} conversations.".format(device.name, len(result["channels"])))
             else:
                 self.logger.error(u"{}: Slack connection error: {}".format(device.name, result["error"]))
 
@@ -66,7 +66,7 @@ class Plugin(indigo.PluginBase):
 
 
     def get_channel_list(self, filter="", valuesDict=None, typeId="", targetId=0):
-        result = self.clients[targetId].api_call("channels.list", exclude_archived=1)
+        result = self.clients[targetId].api_call("conversations.list", exclude_archived=True)
         return [ 
             (channel["id"], channel["name"]) 
             for channel in result["channels"] 
