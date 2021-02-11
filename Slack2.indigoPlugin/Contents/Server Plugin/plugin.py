@@ -32,7 +32,7 @@ class Plugin(indigo.PluginBase):
         self.wrappers = {}
         self.read_threads = {}
         self.channels = {}
-
+        self.triggers = {}
 
     def shutdown(self):
         self.logger.debug(u"Slack 2 shutdown")
@@ -55,15 +55,14 @@ class Plugin(indigo.PluginBase):
         if device.deviceTypeId == "slackAccount":
 
             # Start up the wrapper task            
-            wrapper = Popen(['/usr/bin/python3', './wrapper.py', device.pluginProps['app_token'], device.pluginProps['bot_token']], 
-                                stdin=PIPE, stdout=PIPE, close_fds=True, bufsize=1, universal_newlines=True)
-            self.wrappers[device.id] = wrapper
+            self.wrappers[device.id] = Popen([self.pluginPrefs.get("py3path", "/usr/bin/python3"), './wrapper.py', device.pluginProps['app_token'], device.pluginProps['bot_token']], 
+                                            stdin=PIPE, stdout=PIPE, close_fds=True, bufsize=1, universal_newlines=True)
+
 
             # create the reader thread        
-            read_thread = Thread(target=self.wrapper_read, args=(device.id,))            
-            read_thread.daemon = True
-            read_thread.start()
-            self.read_threads[device.id] = read_thread
+            self.read_threads[device.id] = Thread(target=self.wrapper_read, args=(device.id,))            
+            self.read_threads[device.id].daemon = True
+            self.read_threads[device.id].start()
                                 
     
     def deviceStopComm(self, device):
