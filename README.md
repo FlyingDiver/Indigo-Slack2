@@ -7,13 +7,15 @@ This plugin extends [Indigo](http://www.indigodomo.com) allowing it to send mess
 
 ## Installation
 
-* This plugin requires the Python slackclient and websockets modules, which are not installed by default.  
-* You will also need the Xcode command line tools.
+* This is version 2.+ of the Slack 2 plugin, which uses the current slack_sdk package instead of the older slackclient package.  The SDK requires Python 3, which this plugin supports by running the Python3 code in a separate process which communicates with the Python2 plugin.
+* These instructions assume you're running a version of macOS that supports Python3 natively (Catalina or later).  Running an older version of macOS with Python3 installed separately will probably work, but has not been tested.  The plugin assumes that there is a Python 3.8 (or later) binary at /usr/bin/python3.
+* For the Apple installed Python3 (Catalina or later) you must install and RUN Xcode to get the latest Python components.  Just installing is not enough, Xcode must be started so you get the "Install additional components" prompt.
+* Additional Python packages will need to be installed:
 
 ```
-sudo pip install slackclient
-sudo pip install websocket
-sudo pip install websocket-client
+sudo /usr/bin/pip3 install slack-sdk
+sudo /usr/bin/pip3 install aiohttp
+sudo /usr/bin/pip3 install aiofiles
 ```  
 
 * Download the ZIP file from Releases (above)
@@ -24,5 +26,6 @@ sudo pip install websocket-client
 * Trouble?: Indigo help for the [installation process](http://wiki.indigodomo.com/doku.php?id=indigo_6_documentation:getting_started)
 
 ## Configuration
-Check out [the wiki for detailed configuration information](https://github.com/FlyingDiver/Indigo-Slack2/wiki).
+Requires configuring an application in the Slack Developer's Dashboard.
+See [the wiki for detailed configuration information](https://github.com/FlyingDiver/Indigo-Slack2/wiki).
 

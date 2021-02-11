@@ -126,6 +126,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("{}: {}".format(device.name, data['error']))
 
             elif data['msg'] == 'channels':
+                self.logger.info("{}: Conversation List Updated")
                 self.logger.debug("{}: Channels: {}".format(device.name, data['channels']))
                 self.channels[devID] = [ 
                     (channel["id"], channel["name"]) 
