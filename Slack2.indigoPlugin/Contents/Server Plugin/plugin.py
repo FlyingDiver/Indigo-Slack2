@@ -55,8 +55,7 @@ class Plugin(indigo.PluginBase):
         if device.deviceTypeId == "slackAccount":
 
             # Start up the wrapper task            
-#            wrapper = Popen(['/usr/bin/python3', './wrapper.py', device.pluginProps['app_token'], device.pluginProps['bot_token']], 
-            wrapper = Popen(['./venv/bin/python3', './wrapper.py', device.pluginProps['app_token'], device.pluginProps['bot_token']], 
+            wrapper = Popen(['/usr/bin/python3', './wrapper.py', device.pluginProps['app_token'], device.pluginProps['bot_token']], 
                                 stdin=PIPE, stdout=PIPE, close_fds=True, bufsize=1, universal_newlines=True)
             self.wrappers[device.id] = wrapper
 
