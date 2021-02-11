@@ -23,31 +23,6 @@
 				<TriggerLabel>Status</TriggerLabel>
 				<ControlPageLabel>Status</ControlPageLabel>
 			</State>
-            <State id="last_event_type">
-                <ValueType >String</ValueType>
-                <TriggerLabel>Last Event Type</TriggerLabel>
-                <ControlPageLabel>Last Event Type</ControlPageLabel>
-            </State>
-            <State id="last_event_channel">
-                <ValueType >String</ValueType>
-                <TriggerLabel>Last Event Channel</TriggerLabel>
-                <ControlPageLabel>Last Event Channel</ControlPageLabel>
-            </State>
-            <State id="last_event_channel_type">
-                <ValueType >String</ValueType>
-                <TriggerLabel>Last Event Channel Type</TriggerLabel>
-                <ControlPageLabel>Last Event Channel Type</ControlPageLabel>
-            </State>
-            <State id="last_event_user">
-                <ValueType >String</ValueType>
-                <TriggerLabel>Last Event User</TriggerLabel>
-                <ControlPageLabel>Last Event User</ControlPageLabel>
-            </State>
-            <State id="last_event_text">
-                <ValueType >String</ValueType>
-                <TriggerLabel>Last Event Text</TriggerLabel>
-                <ControlPageLabel>Last Event Text</ControlPageLabel>
-            </State>
 		</States>
     <UiDisplayStateId>status</UiDisplayStateId>
 	</Device>

@@ -32,7 +32,6 @@ class Plugin(indigo.PluginBase):
         self.wrappers = {}
         self.read_threads = {}
         self.channels = {}
-        self.triggers = {}
 
 
     def shutdown(self):
@@ -66,10 +65,6 @@ class Plugin(indigo.PluginBase):
             read_thread.daemon = True
             read_thread.start()
             self.read_threads[device.id] = read_thread
-
-            # request a conversations (channels) list
-            msg = {'cmd': 'conversations_list'} 
-            self.wrapper_write(device, msg)
                                 
     
     def deviceStopComm(self, device):
@@ -79,32 +74,11 @@ class Plugin(indigo.PluginBase):
 
 
     def get_channel_list(self, filter="", valuesDict=None, typeId="", targetId=0):
-        self.logger.debug(u"get_channel_list, targetId={}, typeId={}, valuesDict = {}".format(targetId, typeId, valuesDict))
-        if typeId == 'send':
-            return self.channels[targetId]
-        elif typeId == 'messageEvent':
-            return self.channels[int(valuesDict['slackDevice'])]
-        else:
-            return []
+        return self.channels[targetId]
 
     # doesn't do anything, just needed to force other menus to dynamically refresh
     def menuChanged(self, valuesDict = None, typeId = None, devId = None):
         return valuesDict
-
-    ########################################
-    # Trigger (Event) handling 
-    ########################################
-
-    def triggerStartProcessing(self, trigger):
-        self.logger.debug("{}: Adding Trigger".format(trigger.name))
-        assert trigger.id not in self.triggers
-        self.triggers[trigger.id] = trigger
-
-    def triggerStopProcessing(self, trigger):
-        self.logger.debug("{}: Removing Trigger".format(trigger.name))
-        assert trigger.id in self.triggers
-        del self.triggers[trigger.id]
-
 
     def wrapper_write(self, device, msg):
         jsonMsg = json.dumps(msg)
@@ -125,8 +99,6 @@ class Plugin(indigo.PluginBase):
                 
             elif data['msg'] == 'status':
                 self.logger.info("{}: {}".format(device.name, data['status']))
-                device.updateStateOnServer(key="status", value=data['status'])
-                device.updateStateImageOnServer(indigo.kStateImageSel.None)
                 
             elif data['msg'] == 'error':
                 self.logger.error("{}: {}".format(device.name, data['error']))
@@ -139,30 +111,7 @@ class Plugin(indigo.PluginBase):
                 ]
 
             elif data['msg'] == 'received':
-                self.logger.debug("{}: Received {} ({})".format(device.name, data['type'], data['envelope_id']))
-                self.logger.threaddebug(json.dumps(data['payload'], sort_keys=True, indent=4, separators=(',', ': ')))  
-                event = data['payload']['event']          
-                key_value_list = [
-                    {'key':'last_event_type',           'value':event['type']},
-                    {'key':'last_event_channel',        'value':event['channel']},
-                    {'key':'last_event_channel_type',   'value':event['channel_type']},
-                    {'key':'last_event_user',           'value':event['user']},
-                    {'key':'last_event_text',           'value':event['text']}
-                ]
-                device.updateStatesOnServer(key_value_list)  
-
-                # Now do any triggers
-                for trigger in self.triggers.values():
-                    self.logger.debug("{}: Testing Event Trigger".format(trigger.name))
-                    if trigger.pluginProps["slackDevice"] == str(device.id):
-            
-                        if trigger.pluginTypeId == "messageEvent":
-                            if event['channel'] == trigger.pluginProps['slackChannel']:
-                                indigo.trigger.execute(trigger)
-                                                    
-                        else:
-                            self.logger.error("{}: Unknown Trigger Type {}".format(trigger.name, trigger.pluginTypeId))
-    
+                self.logger.debug("{}: Received {} ({}), payload = {}".format(device.name, data['type'], data['envelope_id'], data['payload']))
             
             else:
                 self.logger.error("{}: Unknown Message type '{}'".format(device.name, data['msg']))
