@@ -128,9 +128,6 @@ async def main():
         exit()
     else:
         await msg_write({'msg': 'status', 'status': "Socket Connected"})
-
-    # report the allowed conversations (channels)  
-    await conversations_list()
     
     # loop on input from plugin
     await read_input()      # never returns    
