@@ -107,10 +107,10 @@ class Plugin(indigo.PluginBase):
 
 
     def wrapper_read(self, devID):
-        device = indigo.devices[devID]
-        wrapper = self.wrappers[device.id]
+        wrapper = self.wrappers[devID]
         while True:
             msg = wrapper.stdout.readline()
+            device = indigo.devices[devID]
             self.logger.threaddebug(u"{}: Received wrapper message: {}".format(device.name, msg.rstrip()))
             
             data = json.loads(msg)
@@ -126,7 +126,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("{}: {}".format(device.name, data['error']))
 
             elif data['msg'] == 'channels':
-                self.logger.info("{}: Conversation List Updated")
+                self.logger.info("{}: Conversation List Updated".format(device.name))
                 self.logger.debug("{}: Channels: {}".format(device.name, data['channels']))
                 self.channels[devID] = [ 
                     (channel["id"], channel["name"]) 
@@ -136,7 +136,13 @@ class Plugin(indigo.PluginBase):
             elif data['msg'] == 'received':
                 self.logger.debug("{}: Received {} ({})".format(device.name, data['type'], data['envelope_id']))
                 self.logger.threaddebug(json.dumps(data['payload'], sort_keys=True, indent=4, separators=(',', ': ')))  
-                event = data['payload']['event']          
+                event = data['payload']['event']
+                user = event.get('user', None)
+                if not user and (event.get('subtype', None) == "bot_message"):  
+                    user = event.get('username', None)
+                if not user:
+                    user = "--Unknown--"
+                    
                 key_value_list = [
                     {'key':'last_event_type',           'value':event['type']},
                     {'key':'last_event_channel',        'value':event['channel']},
@@ -166,14 +172,9 @@ class Plugin(indigo.PluginBase):
     # helper functions
 
     def prepareTextValue(self, strInput):
-
-        if strInput is None:
-            return strInput
-        else:
+        if strInput:
             strInput = self.substitute(strInput.strip()).encode('utf8')
-
-            self.logger.debug("Stripped Text: {}".format(strInput))
-            return strInput
+        return strInput
 
 
     # actions go here
