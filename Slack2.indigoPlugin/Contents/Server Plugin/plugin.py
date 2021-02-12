@@ -73,10 +73,11 @@ class Plugin(indigo.PluginBase):
 
     def get_channel_list(self, filter="", valuesDict=None, typeId="", targetId=0):
         self.logger.debug(u"get_channel_list, targetId={}, typeId={}, valuesDict = {}".format(targetId, typeId, valuesDict))
+        slackDevice = valuesDict.get('slackDevice', None)
         if typeId == 'send':
             return self.channels[targetId]
-        elif typeId == 'messageEvent':
-            return self.channels[int(valuesDict['slackDevice'])]
+        elif typeId == 'messageEvent' and slackDevice:
+            return self.channels[int(slackDevice)]
         else:
             return []
 
