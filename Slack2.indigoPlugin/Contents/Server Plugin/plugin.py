@@ -147,7 +147,7 @@ class Plugin(indigo.PluginBase):
                     {'key':'last_event_type',           'value':event['type']},
                     {'key':'last_event_channel',        'value':event['channel']},
                     {'key':'last_event_channel_type',   'value':event['channel_type']},
-                    {'key':'last_event_user',           'value':event['user']},
+                    {'key':'last_event_user',           'value':user},
                     {'key':'last_event_text',           'value':event['text']}
                 ]
                 device.updateStatesOnServer(key_value_list)  
