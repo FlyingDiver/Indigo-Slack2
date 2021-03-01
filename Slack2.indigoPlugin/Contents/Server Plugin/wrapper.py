@@ -17,16 +17,6 @@ async def msg_write(msg):
     sys.stdout.write(u"{}\n".format(json.dumps(msg)))
     sys.stdout.flush()
 
-
-async def send_to_slack(channel, text):
-    try:
-        response = await web_client.chat_postMessage(channel=channel, text=text)
-        assert response["message"]["text"] == text
-    except SlackApiError as e:
-        assert e.response["ok"] is False
-        assert e.response["error"]  # str like 'invalid_auth', 'channel_not_found'
-        raise e
-
 async def main():
 
     # Process incoming events from Slack, uses the SocketModeClient bot_client
