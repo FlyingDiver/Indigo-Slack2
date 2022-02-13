@@ -4,12 +4,12 @@
 		<Name>Slack Workspace</Name>
 		<ConfigUI>
         	<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
-	        <Field id="bot_token" type="textfield" default="">
-		        <Label>Slack Bot User Token:</Label>
-	        </Field>
-            <Field id="bot_token_help" type="label" fontSize="mini" alignWithControl="true">
-                <Label>Required, starts with "xoxb-", see wiki for instructions</Label>
+            <Field id="getToken" type="button">
+                <Label>Get a Slack OAuth token:</Label>
+                <Title>Get Token</Title>
+                <CallbackMethod>request_oauth</CallbackMethod>
             </Field>
+
 		</ConfigUI>
 		<States>
 			<State id="status">

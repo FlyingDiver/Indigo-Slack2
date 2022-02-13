@@ -9,6 +9,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 from threading import Thread
+from urllib.parse import quote
 
 class Plugin(indigo.PluginBase):
 
@@ -91,6 +92,7 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"{device.name}: Stopping Device")
 
     def reflector_handler(self, action, dev=None, callerWaitingForResult=None):
+        self.logger.threaddebug(f"action: {json.dumps(action, indent=4, sort_keys=True)}")
         request_body = json.loads(action.props['request_body'])
         self.logger.threaddebug(f"request_body: {json.dumps(request_body, indent=4, sort_keys=True)}")
 
@@ -153,6 +155,26 @@ class Plugin(indigo.PluginBase):
     def menuChanged(self, valuesDict = None, typeId = None, devId = None):      # noqa
         return valuesDict
 
+    def request_oauth(self, valuesDict, typeId, devId):
+        # Test here to see if Reflector webhook is available, get reflector name, etc.
+        reflectorURL = indigo.server.getReflectorURL()
+        if not reflectorURL:
+            self.logger.warning("Unable to set up Slack webhooks - no reflector configured")
+            return
+
+        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
+        if not reflector_api_key:
+            self.logger.warning("Unable to set up Slack webhooks - no reflector API key")
+            return
+
+        oauth_url = " https://slack.com/oauth/v2/authorize"
+        client_id = "3094061694373.3109586185505"
+        scopes = "channels:history,channels:join,channels:read,chat:write,files:write,im:history"
+        redirect_uri = self.webhook_url
+
+        request_url = f'{oauth_url}?client_id={client_id}&scope={scopes}&redirect_uri={quote(redirect_uri)}'
+        self.logger.debug(f"request_url = {request_url}")
+        self.browserOpen(request_url)
 
     ########################################
     # Trigger (Event) handling 
