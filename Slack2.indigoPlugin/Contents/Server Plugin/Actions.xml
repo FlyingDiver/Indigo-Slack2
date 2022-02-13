@@ -39,7 +39,11 @@
 
     <Action id="webhook" uiPath="hidden">
         <Name>Reflector Webhooks</Name>
-        <CallbackMethod>reflector_handler</CallbackMethod>
+        <CallbackMethod>webhook_handler</CallbackMethod>
+    </Action>
+    <Action id="oauth" uiPath="hidden">
+        <Name>OAuth Handler</Name>
+        <CallbackMethod>oauth_handler</CallbackMethod>
     </Action>
 
 </Actions>

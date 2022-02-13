@@ -4,11 +4,10 @@
 		<Name>Slack Workspace</Name>
 		<ConfigUI>
         	<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
-            <Field id="getToken" type="button">
-                <Label>Get a Slack OAuth token:</Label>
-                <Title>Get Token</Title>
-                <CallbackMethod>request_oauth</CallbackMethod>
-            </Field>
+            <Field id="bot_token" type="textfield" hidden="true"/>
+            <Field id="Note" type="label">
+                <Label>Press "Save" to initiate OAuth authentication with Slack for this device.</Label>
+             </Field>
 
 		</ConfigUI>
 		<States>

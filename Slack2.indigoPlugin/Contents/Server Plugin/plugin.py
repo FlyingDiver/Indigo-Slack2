@@ -4,12 +4,12 @@
 import logging
 import json
 import os
+import requests
+from urllib.parse import quote, quote_plus
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from threading import Thread
-from urllib.parse import quote
 
 class Plugin(indigo.PluginBase):
 
@@ -25,25 +25,21 @@ class Plugin(indigo.PluginBase):
 
         self.slack_accounts = {}
         self.channels = {}
-        self.triggers = {}
+        self.triggers = []
+        self.webhook_url = None
 
     def startup(self):
         self.logger.debug("Slack 2 startup")
 
         # Test here to see if Reflector webhook is available, get reflector name, etc.
         reflectorURL = indigo.server.getReflectorURL()
-        if not reflectorURL:
-            self.logger.warning("Unable to set up Slack webhooks - no reflector configured")
-            return
-
         reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
-        if not reflector_api_key:
-            self.logger.warning("Unable to set up Slack webhooks - no reflector API key")
+        if not reflectorURL or not reflector_api_key:
+            self.logger.warning("Unable to set up Slack webhook - Reflector not configured")
             return
 
         self.webhook_url = f"{reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}"
         self.logger.info(f"Reflector OK, this is your webhook URI for Slack dashboard: {self.webhook_url}")
-
 
     def shutdown(self):
         self.logger.debug("Slack 2 shutdown")
@@ -56,23 +52,24 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, device):
         self.logger.debug(f"{device.name}: Starting Device")
+        token = device.pluginProps.get('bot_token', None)
+        if not token:
+            self.logger.debug(f"{device.name}: No token")
+            return
 
         client = WebClient(token=device.pluginProps['bot_token'])
         auth_info = client.auth_test()
         self.slack_accounts[auth_info['team_id']] = device.id
         self.logger.info(f"{device.name}: Connected to Slack Workspace '{auth_info['team']}'")
-        channels = {}
 
         self.channels[device.id] = [
             (channel["id"], channel["name"])
             for channel in client.conversations_list()['channels']
         ]
-        self.logger.info("{}: Channel List Updated".format(device.name))
         self.logger.debug("{}: Channels: {}".format(device.name, self.channels[device.id]))
 
-    # doesn't do anything, just needed to force other menus to dynamically refresh
-    def menuChanged(self, valuesDict=None, typeId=None, devId=None):
-        return valuesDict
+    def deviceStopComm(self, device):
+        self.logger.debug(f"{device.name}: Stopping Device")
 
     ########################################
     # Trigger (Event) handling
@@ -86,18 +83,99 @@ class Plugin(indigo.PluginBase):
     def triggerStopProcessing(self, trigger):
         self.logger.debug(f"{trigger.name}: Removing Trigger")
         assert trigger.id in self.triggers
-        del self.triggers[trigger.id]
+        self.triggers.remove(trigger.id)
 
-    def deviceStopComm(self, device):
-        self.logger.debug(f"{device.name}: Stopping Device")
+    ########################################
+    # OAuth methods
+    ########################################
 
-    def reflector_handler(self, action, dev=None, callerWaitingForResult=None):
-        self.logger.threaddebug(f"action: {json.dumps(action, indent=4, sort_keys=True)}")
+    def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
+        if userCancelled:
+            return
+
+        # If the user saves the Workspace device, then it needs to initiate the OAuth process
+
+        reflectorURL = indigo.server.getReflectorURL()
+        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
+
+        if not reflectorURL and not reflector_api_key:
+            self.logger.warning("Unable to do Slack Authentication - no reflector configured")
+            return
+
+        oauth_url = "https://slack.com/oauth/v2/authorize"
+        client_id = "3094061694373.3109586185505"
+        scopes = "channels:history,channels:join,channels:read,chat:write,files:write,im:history"
+        redirect_uri = f"{reflectorURL}/message/{self.pluginId}/oauth?api_key={reflector_api_key}"
+        request_url = f'{oauth_url}?client_id={client_id}&scope={scopes}&state={devId}&redirect_uri={quote_plus(redirect_uri)}'
+        self.logger.info(f"Starting OAuth with URL: {request_url}")
+        self.browserOpen(request_url)
+
+    def oauth_handler(self, action, dev=None, callerWaitingForResult=None):
+        if action.props['incoming_request_method'] != "GET":
+            self.logger.warning(f"oauth_handler: Unexpected request method: {action.props['incoming_request_method']}")
+            self.logger.debug(f"oauth_handler action.props: {action.props}")
+            return "200"
+
+        query_args = action.props['url_query_args']
+        self.logger.debug(f"oauth_handler code = {query_args['code']}, state = {query_args['state']}")
+
+        reflectorURL = indigo.server.getReflectorURL()
+        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
+        client_id = "3094061694373.3109586185505"
+        client_secret = "922633579e0b5f9024e89fa1f25ee151"
+        redirect_uri = f"{reflectorURL}/message/{self.pluginId}/oauth?api_key={reflector_api_key}"
+        self.logger.debug(f"oauth_handler redirect_uri = {redirect_uri}")
+        try:
+            client = WebClient()
+            oauth_response = client.oauth_v2_access(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, code=query_args['code'])
+        except Exception as err:
+            self.logger.debug(f"oauth_handler oauth_v2_access error = {err}")
+            return
+
+        #self.logger.threaddebug(f"oauth_response: {json.dumps(oauth_response, indent=4, sort_keys=True)}")
+        self.logger.threaddebug(f"oauth_response: {oauth_response}")
+
+        bot_token = oauth_response.get("access_token")
+        self.logger.debug(f"bot_token = {bot_token}")
+        if bot_token is None:
+            self.logger.warning(f"missing bot_token")
+            return
+
+        try:
+            auth_test = client.auth_test(token=bot_token)
+        except Exception as err:
+            self.logger.debug(f"oauth_handler auth_test error = {err}")
+            return
+
+        self.logger.threaddebug(f"auth_test: {auth_test}")
+        #self.logger.threaddebug(f"auth_test response: {json.dumps(auth_test, indent=4, sort_keys=True)}")
+
+        self.logger.debug(f"oauth_handler validating request for device {query_args['state']}")
+        device = indigo.devices.get(int(query_args['state']), None)
+        if not device:
+            self.logger.warning(f"No device found for validation request: {query_args['state']}")
+        device.pluginProps['bot_token'] = bot_token
+        newProps = device.pluginProps
+        newProps['bot_token'] = bot_token
+        device.replacePluginPropsOnServer(newProps)
+        self.logger.info(f"Completed OAuth validation for {device.name}")
+
+        return "200"
+
+    ########################################
+    # Reflector handlers
+    ########################################
+
+    def webhook_handler(self, action, dev=None, callerWaitingForResult=None):
+        if action.props['incoming_request_method'] != "POST":
+            self.logger.warning(f"webhook_handler: Unexpected request method: {action.props['incoming_request_method']}")
+            self.logger.debug(f"webhook_handler action.props: {action.props}")
+            return "200"
+
         request_body = json.loads(action.props['request_body'])
-        self.logger.threaddebug(f"request_body: {json.dumps(request_body, indent=4, sort_keys=True)}")
+        self.logger.threaddebug(f"webhook_handler request_body: {json.dumps(request_body, indent=4, sort_keys=True)}")
 
         if request_body['type'] == 'url_verification':
-            self.challenge_token = request_body['token']
             return json.dumps({'challenge': request_body['challenge']})
 
         elif request_body['type'] == 'event_callback':
@@ -106,7 +184,7 @@ class Plugin(indigo.PluginBase):
             return self.handle_event(device, request_body['event'])
 
         else:
-            self.logger.debug(f"{device.name}: Unimplemented message type: {request_body['type']}")
+            self.logger.debug(f"webhook_handler unimplemented message type: {request_body['type']}")
             return "200"
 
     def handle_event(self, device, event):
@@ -129,7 +207,7 @@ class Plugin(indigo.PluginBase):
         # Now do any triggers
         for triggerId in self.triggers:
             trigger = indigo.triggers[triggerId]
-            self.logger.debug("{}: Testing Event Trigger".format(trigger.name))
+            self.logger.debug(f"{trigger.name}: Testing Event Trigger")
             if trigger.pluginProps["slackDevice"] == str(device.id):
 
                 if trigger.pluginTypeId == "messageEvent":
@@ -152,43 +230,8 @@ class Plugin(indigo.PluginBase):
             return []
 
     # doesn't do anything, just needed to force other menus to dynamically refresh
-    def menuChanged(self, valuesDict = None, typeId = None, devId = None):      # noqa
+    def menuChanged(self, valuesDict=None, typeId=None, devId=None):  # noqa
         return valuesDict
-
-    def request_oauth(self, valuesDict, typeId, devId):
-        # Test here to see if Reflector webhook is available, get reflector name, etc.
-        reflectorURL = indigo.server.getReflectorURL()
-        if not reflectorURL:
-            self.logger.warning("Unable to set up Slack webhooks - no reflector configured")
-            return
-
-        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
-        if not reflector_api_key:
-            self.logger.warning("Unable to set up Slack webhooks - no reflector API key")
-            return
-
-        oauth_url = " https://slack.com/oauth/v2/authorize"
-        client_id = "3094061694373.3109586185505"
-        scopes = "channels:history,channels:join,channels:read,chat:write,files:write,im:history"
-        redirect_uri = self.webhook_url
-
-        request_url = f'{oauth_url}?client_id={client_id}&scope={scopes}&redirect_uri={quote(redirect_uri)}'
-        self.logger.debug(f"request_url = {request_url}")
-        self.browserOpen(request_url)
-
-    ########################################
-    # Trigger (Event) handling 
-    ########################################
-
-    def triggerStartProcessing(self, trigger):
-        self.logger.debug(f"{trigger.name}: Adding Trigger")
-        assert trigger.id not in self.triggers
-        self.triggers[trigger.id] = trigger
-
-    def triggerStopProcessing(self, trigger):
-        self.logger.debug(f"{trigger.name}: Removing Trigger")
-        assert trigger.id in self.triggers
-        del self.triggers[trigger.id]
 
     # helper functions
 
@@ -199,7 +242,7 @@ class Plugin(indigo.PluginBase):
 
     # actions go here
     def sendMessage(self, pluginAction, slackDevice, callerWaitingForResult):
-        
+
         msgText = self.prepareTextValue(pluginAction.props['msgBody'])
         channel = pluginAction.props['channel']
 
