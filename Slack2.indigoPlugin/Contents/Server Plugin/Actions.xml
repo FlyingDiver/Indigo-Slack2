@@ -36,4 +36,10 @@
 			<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
 		</ConfigUI>
 	</Action>
+
+    <Action id="webhook" uiPath="hidden">
+        <Name>Reflector Webhooks</Name>
+        <CallbackMethod>reflector_handler</CallbackMethod>
+    </Action>
+
 </Actions>

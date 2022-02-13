@@ -6,3 +6,9 @@
 slack_asyncio.py
 
 slack_client.py
+
+.github/
+
+Slack2.indigoPlugin/.idea/
+
+Slack2.indigoPlugin/Contents/Server Plugin/slack_sdk/__pycache__/

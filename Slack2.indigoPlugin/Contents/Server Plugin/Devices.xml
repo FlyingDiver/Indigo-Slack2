@@ -4,12 +4,6 @@
 		<Name>Slack Workspace</Name>
 		<ConfigUI>
         	<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
-	        <Field id="app_token" type="textfield" default="">
-		        <Label>Slack App Token:</Label>
-	        </Field>
-            <Field id="app_token_help" type="label" fontSize="mini" alignWithControl="true">
-                <Label>Required, starts with "xapp-", see wiki for instructions</Label>
-            </Field>
 	        <Field id="bot_token" type="textfield" default="">
 		        <Label>Slack Bot User Token:</Label>
 	        </Field>
