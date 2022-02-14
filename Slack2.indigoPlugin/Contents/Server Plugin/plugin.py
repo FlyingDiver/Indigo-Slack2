@@ -5,17 +5,28 @@ import logging
 import json
 import os
 import requests
+import threading
 from urllib.parse import quote, quote_plus
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+OAUTH_URL = "https://slack.com/oauth/v2/authorize"
+CLIENT_ID = "3094061694373.3109586185505"
+CLIENT_KEY = "922633579e0b5f9024e89fa1f25ee151"
+SCOPES = "channels:history,channels:join,channels:read,chat:write,files:write,im:history"
+REFRESH_INTERVAL = 6.0 * 60.0 * 60.0    # 6 hours
+
+def make_html_reply(status, title, text):
+    return {'status': status,
+            "headers": {"Content-Type": "text/html; charset=UTF-8", },
+            "content": f'<!DOCTYPE html><html><head><meta charset="UTF-8"><title>{title}</title></head><body>{text}</body></html>'
+            }
 
 class Plugin(indigo.PluginBase):
 
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
-        self.debug = True
 
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%Y-%m-%d %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
@@ -26,23 +37,17 @@ class Plugin(indigo.PluginBase):
         self.slack_accounts = {}
         self.channels = {}
         self.triggers = []
-        self.webhook_url = None
 
-    def startup(self):
-        self.logger.debug("Slack 2 startup")
+        # Test here to see if Reflector is available, get reflector name, etc.
+        self.reflectorURL = indigo.server.getReflectorURL()
+        self.reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
+        if not self.reflectorURL or not self.reflector_api_key:
+            self.reflector_ok = False
+            self.logger.warning("Reflector and API Key required!")
+        else:
+            self.reflector_ok = True
 
-        # Test here to see if Reflector webhook is available, get reflector name, etc.
-        reflectorURL = indigo.server.getReflectorURL()
-        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
-        if not reflectorURL or not reflector_api_key:
-            self.logger.warning("Unable to set up Slack webhook - Reflector not configured")
-            return
-
-        self.webhook_url = f"{reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}"
-        self.logger.info(f"Reflector OK, this is your webhook URI for Slack dashboard: {self.webhook_url}")
-
-    def shutdown(self):
-        self.logger.debug("Slack 2 shutdown")
+        self.refresh_tokens()
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         if not userCancelled:
@@ -52,12 +57,13 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, device):
         self.logger.debug(f"{device.name}: Starting Device")
-        token = device.pluginProps.get('bot_token', None)
-        if not token:
-            self.logger.debug(f"{device.name}: No token")
+
+        access_token = device.pluginProps.get('bot_token', None)
+        if not access_token:
+            self.logger.debug(f"{device.name}: No access token")
             return
 
-        client = WebClient(token=device.pluginProps['bot_token'])
+        client = WebClient(token=access_token)
         auth_info = client.auth_test()
         self.slack_accounts[auth_info['team_id']] = device.id
         self.logger.info(f"{device.name}: Connected to Slack Workspace '{auth_info['team']}'")
@@ -66,10 +72,10 @@ class Plugin(indigo.PluginBase):
             (channel["id"], channel["name"])
             for channel in client.conversations_list()['channels']
         ]
-        self.logger.debug("{}: Channels: {}".format(device.name, self.channels[device.id]))
+        self.logger.debug(f"{device.name}: Channels: {self.channels[device.id]}")
 
-    def deviceStopComm(self, device):
-        self.logger.debug(f"{device.name}: Stopping Device")
+    def didDeviceCommPropertyChange(self, origDev, newDev): # noqa
+        return False
 
     ########################################
     # Trigger (Event) handling
@@ -95,72 +101,121 @@ class Plugin(indigo.PluginBase):
 
         # If the user saves the Workspace device, then it needs to initiate the OAuth process
 
-        reflectorURL = indigo.server.getReflectorURL()
-        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
-
-        if not reflectorURL and not reflector_api_key:
-            self.logger.warning("Unable to do Slack Authentication - no reflector configured")
+        if not self.reflector_ok:
+            self.logger.warning("Reflector and API Key required!")
             return
 
-        oauth_url = "https://slack.com/oauth/v2/authorize"
-        client_id = "3094061694373.3109586185505"
-        scopes = "channels:history,channels:join,channels:read,chat:write,files:write,im:history"
-        redirect_uri = f"{reflectorURL}/message/{self.pluginId}/oauth?api_key={reflector_api_key}"
-        request_url = f'{oauth_url}?client_id={client_id}&scope={scopes}&state={devId}&redirect_uri={quote_plus(redirect_uri)}'
-        self.logger.info(f"Starting OAuth with URL: {request_url}")
+        redirect_uri = f"{self.reflectorURL}/message/{self.pluginId}/oauth?api_key={self.reflector_api_key}"
+        request_url = f'{OAUTH_URL}?client_id={CLIENT_ID}&scope={SCOPES}&state={devId}&redirect_uri={quote_plus(redirect_uri)}'
+        self.logger.debug(f"Starting OAuth for {devId} with URL:\n{request_url}")
         self.browserOpen(request_url)
 
     def oauth_handler(self, action, dev=None, callerWaitingForResult=None):
+
         if action.props['incoming_request_method'] != "GET":
             self.logger.warning(f"oauth_handler: Unexpected request method: {action.props['incoming_request_method']}")
             self.logger.debug(f"oauth_handler action.props: {action.props}")
-            return "200"
+            return make_html_reply(400, "Unexpected request method", f"Unexpected request method: {action.props['incoming_request_method']}")
 
         query_args = action.props['url_query_args']
-        self.logger.debug(f"oauth_handler code = {query_args['code']}, state = {query_args['state']}")
+        self.logger.debug(f"oauth_handler: OAuth validation query, code = {query_args['code']}, state = {query_args['state']}")
 
-        reflectorURL = indigo.server.getReflectorURL()
-        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
-        client_id = "3094061694373.3109586185505"
-        client_secret = "922633579e0b5f9024e89fa1f25ee151"
-        redirect_uri = f"{reflectorURL}/message/{self.pluginId}/oauth?api_key={reflector_api_key}"
+        redirect_uri = f"{self.reflectorURL}/message/{self.pluginId}/oauth?api_key={self.reflector_api_key}"
         self.logger.debug(f"oauth_handler redirect_uri = {redirect_uri}")
         try:
             client = WebClient()
-            oauth_response = client.oauth_v2_access(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, code=query_args['code'])
+            oauth_response = client.oauth_v2_access(client_id=CLIENT_ID, client_secret=CLIENT_KEY, redirect_uri=redirect_uri, code=query_args['code'])
         except Exception as err:
             self.logger.debug(f"oauth_handler oauth_v2_access error = {err}")
-            return
+            return make_html_reply(400, "oauth_v2_access error", f"Uoauth_v2_access error: {err}")
+        self.logger.threaddebug(f"oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
 
-        #self.logger.threaddebug(f"oauth_response: {json.dumps(oauth_response, indent=4, sort_keys=True)}")
-        self.logger.threaddebug(f"oauth_response: {oauth_response}")
+        access_token = oauth_response.get("access_token")
+        self.logger.debug(f"access_token = {access_token}")
+        if access_token is None:
+            self.logger.warning(f"missing access_token")
+            return make_html_reply(400, "oauth_v2_access error", f"missing access_token")
 
-        bot_token = oauth_response.get("access_token")
-        self.logger.debug(f"bot_token = {bot_token}")
-        if bot_token is None:
-            self.logger.warning(f"missing bot_token")
-            return
+        refresh_token = oauth_response.get("refresh_token")
+        self.logger.debug(f"refresh_token = {refresh_token}")
+        if refresh_token is None:
+            self.logger.warning(f"missing refresh_token")
+            return make_html_reply(400, "oauth_v2_access error", f"missing refresh_token")
+
+        expires_in = oauth_response.get("expires_in")
+        self.logger.debug(f"expires_in = {expires_in}")
+        if expires_in is None:
+            self.logger.warning(f"missing expires_in")
+            return make_html_reply(400, "oauth_v2_access error", f"missing expires_in")
 
         try:
-            auth_test = client.auth_test(token=bot_token)
+            auth_test = client.auth_test(token=access_token)
         except Exception as err:
             self.logger.debug(f"oauth_handler auth_test error = {err}")
-            return
-
-        self.logger.threaddebug(f"auth_test: {auth_test}")
-        #self.logger.threaddebug(f"auth_test response: {json.dumps(auth_test, indent=4, sort_keys=True)}")
+            return make_html_reply(400, "auth_test error", f"auth_test error: {err}")
+        self.logger.threaddebug(f"auth_test response: {json.dumps(auth_test.data, indent=4, sort_keys=True)}")
 
         self.logger.debug(f"oauth_handler validating request for device {query_args['state']}")
         device = indigo.devices.get(int(query_args['state']), None)
         if not device:
             self.logger.warning(f"No device found for validation request: {query_args['state']}")
-        device.pluginProps['bot_token'] = bot_token
-        newProps = device.pluginProps
-        newProps['bot_token'] = bot_token
-        device.replacePluginPropsOnServer(newProps)
-        self.logger.info(f"Completed OAuth validation for {device.name}")
+            return make_html_reply(400, "State validation error", f"No device found for validation request: {query_args['state']}")
 
-        return "200"
+        newProps = device.pluginProps
+        newProps['bot_token'] = access_token   # historical prop name
+        newProps['refresh_token'] = refresh_token
+        device.replacePluginPropsOnServer(newProps)
+        self.logger.info(f"Completed OAuth validation for Workspace {device.name}")
+        return make_html_reply(200, "Slack Authentication Successful", f"Slack Authentication Successful for Workspace {auth_test.get('team')}")
+
+    def refresh_tokens(self):
+        self.logger.debug(f"refresh_tokens start")
+        for device in indigo.devices.iter("self"):
+
+            refresh_token = device.pluginProps.get('refresh_token', None)
+            self.logger.debug(f"{device.name}: Token refresh using {refresh_token}")
+
+            try:
+                client = WebClient()
+                oauth_response = client.oauth_v2_access(client_id=CLIENT_ID, client_secret=CLIENT_KEY, grant_type="refresh_token", refresh_token=refresh_token)
+            except Exception as err:
+                self.logger.debug(f"oauth_handler oauth_v2_access error = {err}")
+                return
+            self.logger.threaddebug(f"oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
+
+            access_token = oauth_response.get("access_token")
+            self.logger.debug(f"access_token = {access_token}")
+            if access_token is None:
+                self.logger.warning(f"missing access_token")
+                return
+
+            refresh_token = oauth_response.get("refresh_token")
+            self.logger.debug(f"refresh_token = {refresh_token}")
+            if refresh_token is None:
+                self.logger.warning(f"missing refresh_token")
+                return
+
+            expires_in = oauth_response.get("expires_in")
+            self.logger.debug(f"expires_in = {expires_in}")
+            if expires_in is None:
+                self.logger.warning(f"missing expires_in")
+                return
+
+            newProps = device.pluginProps
+            newProps['bot_token'] = access_token   # historical prop name
+            newProps['refresh_token'] = refresh_token
+            device.replacePluginPropsOnServer(newProps)
+            self.logger.info(f"Completed Token Refresh for {device.name}")
+
+        # start timer for next refresh.
+        self.logger.debug(f"Resetting timer for token refresh")
+        try:
+            self.refresh_timer = threading.Timer(interval=REFRESH_INTERVAL, function=self.refresh_tokens)   # noqa
+            self.refresh_timer.start()
+        except Exception as err:
+            self.logger.debug(f"Error starting refresh timer: {err}")
+        self.logger.debug(f"Done resetting timer for token refresh")
+        return
 
     ########################################
     # Reflector handlers
@@ -170,7 +225,7 @@ class Plugin(indigo.PluginBase):
         if action.props['incoming_request_method'] != "POST":
             self.logger.warning(f"webhook_handler: Unexpected request method: {action.props['incoming_request_method']}")
             self.logger.debug(f"webhook_handler action.props: {action.props}")
-            return "200"
+            return {'status': 400}
 
         request_body = json.loads(action.props['request_body'])
         self.logger.threaddebug(f"webhook_handler request_body: {json.dumps(request_body, indent=4, sort_keys=True)}")
@@ -185,7 +240,7 @@ class Plugin(indigo.PluginBase):
 
         else:
             self.logger.debug(f"webhook_handler unimplemented message type: {request_body['type']}")
-            return "200"
+            return {'status': 400}
 
     def handle_event(self, device, event):
 
@@ -194,7 +249,7 @@ class Plugin(indigo.PluginBase):
             user = event.get('username', None)
         if not user:
             user = "--Unknown--"
-
+        self.logger.debug(f"{device.name}: Event type: {event['type']}, Channel: {event['channel']}, User: {user}, Text: {event['text']}")
         key_value_list = [
             {'key': 'last_event_type', 'value': event['type']},
             {'key': 'last_event_channel', 'value': event['channel']},
@@ -217,7 +272,9 @@ class Plugin(indigo.PluginBase):
                 else:
                     self.logger.error(f"{trigger.name}: Unknown Trigger Type {trigger.pluginTypeId}")
 
-        return "200"
+        return {'status': 200}
+
+    ##################
 
     def get_channel_list(self, filter="", valuesDict=None, typeId="", targetId=0):
         self.logger.debug(f"get_channel_list, targetId={targetId}, typeId={typeId}, valuesDict = {valuesDict}")

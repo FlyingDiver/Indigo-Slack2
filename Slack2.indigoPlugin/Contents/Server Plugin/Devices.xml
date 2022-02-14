@@ -5,6 +5,7 @@
 		<ConfigUI>
         	<SupportURL>https://github.com/FlyingDiver/indigo-slack2/issues</SupportURL>
             <Field id="bot_token" type="textfield" hidden="true"/>
+            <Field id="refresh_token" type="textfield" hidden="true"/>
             <Field id="Note" type="label">
                 <Label>Press "Save" to initiate OAuth authentication with Slack for this device.</Label>
              </Field>
