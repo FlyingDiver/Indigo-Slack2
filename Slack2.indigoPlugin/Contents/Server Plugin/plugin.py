@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import indigo
 import logging
 import json
 import os
@@ -112,12 +113,28 @@ class Plugin(indigo.PluginBase):
 
     def oauth_handler(self, action, dev=None, callerWaitingForResult=None):
 
+        self.logger.threaddebug(f"oauth_handler: action.props = {action.props}")
+
         if action.props['incoming_request_method'] != "GET":
             self.logger.warning(f"oauth_handler: Unexpected request method: {action.props['incoming_request_method']}")
             self.logger.debug(f"oauth_handler action.props: {action.props}")
             return make_html_reply(400, "Unexpected request method", f"Unexpected request method: {action.props['incoming_request_method']}")
 
         query_args = action.props['url_query_args']
+        device = indigo.devices.get(int(query_args['state']), None)
+        if not device:
+            self.logger.warning(f"No device found for OAuth response: {query_args['state']}")
+            return make_html_reply(400, "State validation error", f"No device found for validation request: {query_args['state']}")
+
+        error = query_args.get('error', None)   # Error Response
+        if error:
+            msg = f"OAuth request error: {error}"
+            desc = query_args.get('error_description', None)
+            if desc:
+                msg = msg + f", {desc}"
+            self.logger.warning(f"{device.name}: {msg}")
+            return make_html_reply(400, "OAuth validation error", f"{msg}")
+
         self.logger.debug(f"oauth_handler: OAuth validation query, code = {query_args['code']}, state = {query_args['state']}")
 
         redirect_uri = f"{self.reflectorURL}/message/{self.pluginId}/oauth?api_key={self.reflector_api_key}"
@@ -126,46 +143,42 @@ class Plugin(indigo.PluginBase):
             client = WebClient()
             oauth_response = client.oauth_v2_access(client_id=CLIENT_ID, client_secret=CLIENT_KEY, redirect_uri=redirect_uri, code=query_args['code'])
         except Exception as err:
-            self.logger.debug(f"oauth_handler oauth_v2_access error = {err}")
+            self.logger.debug(f"{device.name}: oauth_handler oauth_v2_access error = {err}")
             return make_html_reply(400, "oauth_v2_access error", f"Uoauth_v2_access error: {err}")
-        self.logger.threaddebug(f"oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
+        self.logger.threaddebug(f"{device.name}: oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
 
         access_token = oauth_response.get("access_token")
-        self.logger.debug(f"access_token = {access_token}")
+        self.logger.debug(f"{device.name}: access_token = {access_token}")
         if access_token is None:
-            self.logger.warning(f"missing access_token")
-            return make_html_reply(400, "oauth_v2_access error", f"missing access_token")
+            self.logger.warning(f"{device.name}: missing access_token")
+            return make_html_reply(400, "oauth_v2_access error", "missing access_token")
 
         refresh_token = oauth_response.get("refresh_token")
-        self.logger.debug(f"refresh_token = {refresh_token}")
+        self.logger.debug(f"{device.name}: refresh_token = {refresh_token}")
         if refresh_token is None:
-            self.logger.warning(f"missing refresh_token")
-            return make_html_reply(400, "oauth_v2_access error", f"missing refresh_token")
+            self.logger.warning(f"{device.name}: missing refresh_token")
+            return make_html_reply(400, "oauth_v2_access error", "missing refresh_token")
 
         expires_in = oauth_response.get("expires_in")
-        self.logger.debug(f"expires_in = {expires_in}")
+        self.logger.debug(f"{device.name}: expires_in = {expires_in}")
         if expires_in is None:
-            self.logger.warning(f"missing expires_in")
-            return make_html_reply(400, "oauth_v2_access error", f"missing expires_in")
+            self.logger.warning(f"{device.name}: missing expires_in")
+            return make_html_reply(400, "oauth_v2_access error", "missing expires_in")
 
         try:
             auth_test = client.auth_test(token=access_token)
         except Exception as err:
-            self.logger.debug(f"oauth_handler auth_test error = {err}")
+            self.logger.debug(f"{device.name}: oauth_handler auth_test error = {err}")
             return make_html_reply(400, "auth_test error", f"auth_test error: {err}")
-        self.logger.threaddebug(f"auth_test response: {json.dumps(auth_test.data, indent=4, sort_keys=True)}")
+        self.logger.threaddebug(f"{device.name}: auth_test response: {json.dumps(auth_test.data, indent=4, sort_keys=True)}")
 
-        self.logger.debug(f"oauth_handler validating request for device {query_args['state']}")
-        device = indigo.devices.get(int(query_args['state']), None)
-        if not device:
-            self.logger.warning(f"No device found for validation request: {query_args['state']}")
-            return make_html_reply(400, "State validation error", f"No device found for validation request: {query_args['state']}")
+        self.logger.debug(f"{device.name}: oauth_handler validating request for device {query_args['state']}")
 
         newProps = device.pluginProps
         newProps['bot_token'] = access_token   # historical prop name
         newProps['refresh_token'] = refresh_token
         device.replacePluginPropsOnServer(newProps)
-        self.logger.info(f"Completed OAuth validation for Workspace {device.name}")
+        self.logger.info(f"{device.name}: Completed OAuth validation")
         return make_html_reply(200, "Slack Authentication Successful", f"Slack Authentication Successful for Workspace {auth_test.get('team')}")
 
     def refresh_tokens(self):
@@ -179,33 +192,33 @@ class Plugin(indigo.PluginBase):
                 client = WebClient()
                 oauth_response = client.oauth_v2_access(client_id=CLIENT_ID, client_secret=CLIENT_KEY, grant_type="refresh_token", refresh_token=refresh_token)
             except Exception as err:
-                self.logger.debug(f"oauth_handler oauth_v2_access error = {err}")
+                self.logger.debug(f"{device.name}: oauth_handler oauth_v2_access error = {err}")
                 return
-            self.logger.threaddebug(f"oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
+            self.logger.threaddebug(f"{device.name}: oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
 
             access_token = oauth_response.get("access_token")
-            self.logger.debug(f"access_token = {access_token}")
+            self.logger.debug(f"{device.name}: access_token = {access_token}")
             if access_token is None:
-                self.logger.warning(f"missing access_token")
+                self.logger.warning(f"{device.name}: missing access_token")
                 return
 
             refresh_token = oauth_response.get("refresh_token")
-            self.logger.debug(f"refresh_token = {refresh_token}")
+            self.logger.debug(f"{device.name}: refresh_token = {refresh_token}")
             if refresh_token is None:
-                self.logger.warning(f"missing refresh_token")
+                self.logger.warning(f"{device.name}: missing refresh_token")
                 return
 
             expires_in = oauth_response.get("expires_in")
-            self.logger.debug(f"expires_in = {expires_in}")
+            self.logger.debug(f"{device.name}: expires_in = {expires_in}")
             if expires_in is None:
-                self.logger.warning(f"missing expires_in")
+                self.logger.warning(f"{device.name}: missing expires_in")
                 return
 
             newProps = device.pluginProps
             newProps['bot_token'] = access_token   # historical prop name
             newProps['refresh_token'] = refresh_token
             device.replacePluginPropsOnServer(newProps)
-            self.logger.info(f"Completed Token Refresh for {device.name}")
+            self.logger.info(f"{device.name}: Completed Token Refresh")
 
         # start timer for next refresh.
         self.logger.debug(f"Resetting timer for token refresh")
