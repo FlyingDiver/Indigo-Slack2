@@ -172,13 +172,12 @@ class Plugin(indigo.PluginBase):
             return make_html_reply(400, "auth_test error", f"auth_test error: {err}")
         self.logger.threaddebug(f"{device.name}: auth_test response: {json.dumps(auth_test.data, indent=4, sort_keys=True)}")
 
-        self.logger.debug(f"{device.name}: oauth_handler validating request for device {query_args['state']}")
-
         newProps = device.pluginProps
+        newProps['address'] = auth_test.get('team_id')
         newProps['bot_token'] = access_token   # historical prop name
         newProps['refresh_token'] = refresh_token
         device.replacePluginPropsOnServer(newProps)
-        self.logger.info(f"{device.name}: Completed OAuth validation")
+        self.logger.info(f"{device.name}: Completed OAuth validation for Workspace '{auth_test.get('team')}'")
         return make_html_reply(200, "Slack Authentication Successful", f"Slack Authentication Successful for Workspace {auth_test.get('team')}")
 
     def refresh_tokens(self):
@@ -227,7 +226,6 @@ class Plugin(indigo.PluginBase):
             self.refresh_timer.start()
         except Exception as err:
             self.logger.debug(f"Error starting refresh timer: {err}")
-        self.logger.debug(f"Done resetting timer for token refresh")
         return
 
     ########################################
@@ -235,10 +233,12 @@ class Plugin(indigo.PluginBase):
     ########################################
 
     def webhook_handler(self, action, dev=None, callerWaitingForResult=None):
+
+        self.logger.threaddebug(f"webhook_handler: action.props = {action.props}")
+
         if action.props['incoming_request_method'] != "POST":
             self.logger.warning(f"webhook_handler: Unexpected request method: {action.props['incoming_request_method']}")
-            self.logger.debug(f"webhook_handler action.props: {action.props}")
-            return {'status': 400}
+            return make_html_reply(400, "webhook error", f"webhook error: {err}")
 
         request_body = json.loads(action.props['request_body'])
         self.logger.threaddebug(f"webhook_handler request_body: {json.dumps(request_body, indent=4, sort_keys=True)}")
@@ -247,13 +247,18 @@ class Plugin(indigo.PluginBase):
             return json.dumps({'challenge': request_body['challenge']})
 
         elif request_body['type'] == 'event_callback':
-            devId = self.slack_accounts[request_body["team_id"]]
+
+            devId = self.slack_accounts.get(request_body.get("team_id", None), None)
+            if not devId:
+                self.logger.warning(f"No device found for event_callback: {request_body['team_id']}")
+                return make_html_reply(400, "State validation error", f"No device found for validation request: {request_body['team_id']}")
+
             device = indigo.devices[devId]
             return self.handle_event(device, request_body['event'])
 
         else:
             self.logger.debug(f"webhook_handler unimplemented message type: {request_body['type']}")
-            return {'status': 400}
+            return make_html_reply(400, "webhook error", f"Unknown message type: {request_body['type']}")
 
     def handle_event(self, device, event):
 
@@ -262,9 +267,10 @@ class Plugin(indigo.PluginBase):
             user = event.get('username', None)
         if not user:
             user = "--Unknown--"
-        self.logger.debug(f"{device.name}: Event type: {event['type']}, Channel: {event['channel']}, User: {user}, Text: {event['text']}")
+        self.logger.debug(f"{device.name}: Event type: {event['type']}, Team: {event['team']}, Channel: {event['channel']}, User: {user}, Text: {event['text']}")
         key_value_list = [
             {'key': 'last_event_type', 'value': event['type']},
+            {'key': 'last_event_team', 'value': event['team']},
             {'key': 'last_event_channel', 'value': event['channel']},
             {'key': 'last_event_channel_type', 'value': event['channel_type']},
             {'key': 'last_event_user', 'value': user},
@@ -285,7 +291,7 @@ class Plugin(indigo.PluginBase):
                 else:
                     self.logger.error(f"{trigger.name}: Unknown Trigger Type {trigger.pluginTypeId}")
 
-        return {'status': 200}
+        return make_html_reply(200, "event_callback Successful", f"Slack event_callback Successful for Workspace {event.get('team')}")
 
     ##################
 
@@ -327,3 +333,8 @@ class Plugin(indigo.PluginBase):
                 path = os.path.expanduser(file)
                 name = os.path.basename(path)
                 client.files_upload(channels=channel, file=path, title=name)
+
+    def menu_dump_devices(self):
+        self.logger.info(f"slack_accounts=\n{json.dumps(self.slack_accounts, indent=4, sort_keys=True)}")
+        self.logger.info(f"channels=\n{json.dumps(self.channels, indent=4, sort_keys=True)}")
+        return True

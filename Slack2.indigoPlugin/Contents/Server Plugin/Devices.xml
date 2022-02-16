@@ -22,6 +22,11 @@
                 <TriggerLabel>Last Event Type</TriggerLabel>
                 <ControlPageLabel>Last Event Type</ControlPageLabel>
             </State>
+            <State id="last_event_team">
+                <ValueType >String</ValueType>
+                <TriggerLabel>Last Event Team</TriggerLabel>
+                <ControlPageLabel>Last Event Team</ControlPageLabel>
+            </State>
             <State id="last_event_channel">
                 <ValueType >String</ValueType>
                 <TriggerLabel>Last Event Channel</TriggerLabel>
