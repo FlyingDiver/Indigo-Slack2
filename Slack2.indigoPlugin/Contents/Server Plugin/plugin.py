@@ -123,6 +123,7 @@ class Plugin(indigo.PluginBase):
             {'key': 'last_event_text', 'value': event['text']}
         ]
         device.updateStatesOnServer(key_value_list)
+        self.logger.debug(f"{device.name}: {event['type']} event in channel {event['channel']} handled")
 
         # Now do any triggers
         for triggerId in self.triggers:
