@@ -40,9 +40,7 @@ class Plugin(indigo.PluginBase):
             self.logger.warning("Unable to set up Slack webhooks - no reflector API key")
             return
 
-        self.webhook_url = f"{reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}"
-        self.logger.info(f"Reflector OK, this is your webhook URI for Slack dashboard: {self.webhook_url}")
-
+        self.logger.info(f"Reflector OK, this is your webhook URI for Slack dashboard: {reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}")
 
     def shutdown(self):
         self.logger.debug("Slack 2 shutdown")
@@ -60,7 +58,6 @@ class Plugin(indigo.PluginBase):
         auth_info = client.auth_test()
         self.slack_accounts[auth_info['team_id']] = device.id
         self.logger.info(f"{device.name}: Connected to Slack Workspace '{auth_info['team']}'")
-        channels = {}
 
         self.channels[device.id] = [
             (channel["id"], channel["name"])
@@ -68,24 +65,6 @@ class Plugin(indigo.PluginBase):
         ]
         self.logger.info("{}: Channel List Updated".format(device.name))
         self.logger.debug("{}: Channels: {}".format(device.name, self.channels[device.id]))
-
-    # doesn't do anything, just needed to force other menus to dynamically refresh
-    def menuChanged(self, valuesDict=None, typeId=None, devId=None):
-        return valuesDict
-
-    ########################################
-    # Trigger (Event) handling
-    ########################################
-
-    def triggerStartProcessing(self, trigger):
-        self.logger.debug(f"{trigger.name}: Adding Trigger")
-        assert trigger.id not in self.triggers
-        self.triggers.append(trigger.id)
-
-    def triggerStopProcessing(self, trigger):
-        self.logger.debug(f"{trigger.name}: Removing Trigger")
-        assert trigger.id in self.triggers
-        del self.triggers[trigger.id]
 
     def deviceStopComm(self, device):
         self.logger.debug(f"{device.name}: Stopping Device")
@@ -95,7 +74,6 @@ class Plugin(indigo.PluginBase):
         self.logger.threaddebug(f"request_body: {json.dumps(request_body, indent=4, sort_keys=True)}")
 
         if request_body['type'] == 'url_verification':
-            self.challenge_token = request_body['token']
             return json.dumps({'challenge': request_body['challenge']})
 
         elif request_body['type'] == 'event_callback':
@@ -104,7 +82,7 @@ class Plugin(indigo.PluginBase):
             return self.handle_event(device, request_body['event'])
 
         else:
-            self.logger.debug(f"{device.name}: Unimplemented message type: {request_body['type']}")
+            self.logger.debug(f"reflector_handler: Unimplemented message type: {request_body['type']}")
             return "200"
 
     def handle_event(self, device, event):
@@ -153,7 +131,6 @@ class Plugin(indigo.PluginBase):
     # doesn't do anything, just needed to force other menus to dynamically refresh
     def menuChanged(self, valuesDict = None, typeId = None, devId = None):      # noqa
         return valuesDict
-
 
     ########################################
     # Trigger (Event) handling 
