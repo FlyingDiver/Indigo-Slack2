@@ -16,3 +16,7 @@ Slack2.indigoPlugin/Contents/Server Plugin/slack_sdk/__pycache__/
 Slack2.indigoPlugin/Contents/Server Plugin/slack_sdk/errors/__pycache__/
 
 *.pyc
+
+*.yml
+
+*.yaml
