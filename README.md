@@ -4,13 +4,13 @@
 
 This plugin extends [Indigo](http://www.indigodomo.com) allowing it to send messages to [Slack](https://slack.com).
 
-| Requirement            |                     |   |
-|------------------------|---------------------|---|
-| Minimum Indigo Version | 2022.1              |   |
-| Python Library (API)   | Official            |   |
-| Requires Local Network | No                  |   |
-| Requires Internet      | Yes                 |   |
-| Hardware Interface     | None                |   |
+| Requirement            |                     |
+|------------------------|---------------------|
+| Minimum Indigo Version | 2022.1              |
+| Python Library (API)   | Official            |
+| Requires Local Network | No                  |
+| Requires Internet      | Yes                 |
+| Hardware Interface     | None                |
 
 
 ## Configuration

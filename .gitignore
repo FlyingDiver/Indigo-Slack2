@@ -12,3 +12,5 @@ slack_client.py
 Slack2.indigoPlugin/.idea/
 
 Slack2.indigoPlugin/Contents/Server Plugin/slack_sdk/__pycache__/
+
+.idea/
