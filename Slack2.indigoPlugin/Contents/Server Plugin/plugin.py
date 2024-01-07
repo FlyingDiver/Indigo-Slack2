@@ -13,8 +13,8 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 OAUTH_URL = "https://slack.com/oauth/v2/authorize"
-CLIENT_ID = "3094061694373.3109586185505"
-CLIENT_KEY = "922633579e0b5f9024e89fa1f25ee151"
+CLIENT_ID = "56489787361.3638621557696"
+CLIENT_KEY = "212532f33013bc27f4d540df875ab53f"
 SCOPES = "channels:history,channels:join,channels:read,chat:write,files:write,im:history"
 REFRESH_INTERVAL = 6.0 * 60.0 * 60.0    # 6 hours
 
@@ -144,7 +144,7 @@ class Plugin(indigo.PluginBase):
             oauth_response = client.oauth_v2_access(client_id=CLIENT_ID, client_secret=CLIENT_KEY, redirect_uri=redirect_uri, code=query_args['code'])
         except Exception as err:
             self.logger.debug(f"{device.name}: oauth_handler oauth_v2_access error = {err}")
-            return make_html_reply(400, "oauth_v2_access error", f"Uoauth_v2_access error: {err}")
+            return make_html_reply(400, "oauth_v2_access error", f"oauth_v2_access error: {err}")
         self.logger.threaddebug(f"{device.name}: oauth_response: {json.dumps(oauth_response.data, indent=4, sort_keys=True)}")
 
         access_token = oauth_response.get("access_token")
