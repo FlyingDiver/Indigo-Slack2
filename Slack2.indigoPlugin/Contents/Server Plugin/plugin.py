@@ -254,27 +254,26 @@ class Plugin(indigo.PluginBase):
                 return make_html_reply(400, "State validation error", f"No device found for validation request: {request_body['team_id']}")
 
             device = indigo.devices[devId]
-            return self.handle_event(device, request_body['event'])
+            return self.handle_event(device, request_body['event'], team_id=request_body['authorizations'][0]['team_id'])
 
         else:
             self.logger.debug(f"webhook_handler unimplemented message type: {request_body['type']}")
             return make_html_reply(400, "webhook error", f"Unknown message type: {request_body['type']}")
 
-    def handle_event(self, device, event):
+    def handle_event(self, device, event, team_id=None):
 
         user = event.get('user', None)
         if not user and (event.get('subtype', None) == "bot_message"):
             user = event.get('username', None)
         if not user:
             user = "--Unknown--"
-        self.logger.debug(f"{device.name}: Event type: {event['type']}, Team: {event['team']}, Channel: {event['channel']}, User: {user}, Text: {event['text']}")
         key_value_list = [
-            {'key': 'last_event_type', 'value': event['type']},
-            {'key': 'last_event_team', 'value': event['team']},
-            {'key': 'last_event_channel', 'value': event['channel']},
-            {'key': 'last_event_channel_type', 'value': event['channel_type']},
+            {'key': 'last_event_type', 'value': event.get('type')},
+            {'key': 'last_event_team', 'value': event.get('team', team_id)},
+            {'key': 'last_event_channel', 'value': event.get('channel')},
+            {'key': 'last_event_channel_type', 'value': event.get('channel_type')},
             {'key': 'last_event_user', 'value': user},
-            {'key': 'last_event_text', 'value': event['text']}
+            {'key': 'last_event_text', 'value': event.get('text')}
         ]
         device.updateStatesOnServer(key_value_list)
         self.logger.debug(f"{device.name}: {event['type']} event in channel {event['channel']} handled")
